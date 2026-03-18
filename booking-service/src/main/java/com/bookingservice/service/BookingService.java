@@ -2,6 +2,7 @@ package com.bookingservice.service;
 
 import com.bookingservice.dto.BookingDTO;
 import com.bookingservice.entity.Bookings;
+import com.bookingservice.exception.BadRequestException;
 import com.bookingservice.repository.BookingRepository;
 import com.bookingservice.repository.HotelClient;
 import com.bookingservice.repository.UserClient;
@@ -18,14 +19,26 @@ public class BookingService {
     private final UserClient userClient;
     private final HotelClient hotelClient;
 
-    public Bookings createBooking(BookingDTO dto) {
+    public Bookings createBooking(BookingDTO dto, Long tokenUserId, String tokenRole) {
+
+        Long bookingUserId = dto.getUserId();
+        if ("USER".equalsIgnoreCase(tokenRole)) {
+            if (bookingUserId != null && !bookingUserId.equals(tokenUserId)) {
+                throw new BadRequestException("Users can create bookings only for themselves");
+            }
+            bookingUserId = tokenUserId;
+        }
+
+        if (bookingUserId == null) {
+            throw new BadRequestException("userId is required");
+        }
 
         // Validate
-        userClient.getUser(dto.getUserId());
+        userClient.getUser(bookingUserId);
         hotelClient.getHotel(dto.getHotelId());
 
         Bookings booking = new Bookings();
-        booking.setUserId(dto.getUserId());
+        booking.setUserId(bookingUserId);
         booking.setHotelId(dto.getHotelId());
         booking.setCheckIn(dto.getCheckIn());
         booking.setCheckOut(dto.getCheckOut());
