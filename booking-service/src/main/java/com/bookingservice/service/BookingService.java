@@ -19,33 +19,47 @@ public class BookingService {
     private final UserClient userClient;
     private final HotelClient hotelClient;
 
-    public Bookings createBooking(BookingDTO dto, Long tokenUserId, String tokenRole) {
+    public Bookings createBooking(BookingDTO dto, Long tokenUserId, String tokenRole, String authorization) {
 
-        Long bookingUserId = dto.getUserId();
-        if ("USER".equalsIgnoreCase(tokenRole)) {
-            if (bookingUserId != null && !bookingUserId.equals(tokenUserId)) {
-                throw new BadRequestException("Users can create bookings only for themselves");
+        try {
+            Long bookingUserId = dto.getUserId();
+
+            if ("USER".equalsIgnoreCase(tokenRole)) {
+                if (bookingUserId != null && !bookingUserId.equals(tokenUserId)) {
+                    throw new BadRequestException("Users can create bookings only for themselves");
+                }
+                bookingUserId = tokenUserId;
             }
-            bookingUserId = tokenUserId;
+
+            if (bookingUserId == null) {
+                throw new BadRequestException("userId is required");
+            }
+
+            // 🔥 External service calls
+            userClient.getUser(bookingUserId, authorization);
+            hotelClient.getHotel(dto.getHotelId(), authorization);
+
+            Bookings booking = new Bookings();
+            booking.setUserId(bookingUserId);
+            booking.setHotelId(dto.getHotelId());
+            booking.setCheckIn(dto.getCheckIn());
+            booking.setCheckOut(dto.getCheckOut());
+            booking.setPrice(dto.getPrice());
+            booking.setStatus("BOOKED");
+
+            return bookingRepository.save(booking);
+
+        } catch (BadRequestException e) {
+            System.err.println("Bad Request: " + e.getMessage());
+            throw e;
+
+        } catch (Exception e) {
+            // 🔥 THIS WILL SHOW REAL ERROR IN CONSOLE
+            System.err.println("Error while creating booking:");
+            e.printStackTrace();
+
+            throw new RuntimeException("Failed to create booking: " + e.getMessage());
         }
-
-        if (bookingUserId == null) {
-            throw new BadRequestException("userId is required");
-        }
-
-        // Validate
-        userClient.getUser(bookingUserId);
-        hotelClient.getHotel(dto.getHotelId());
-
-        Bookings booking = new Bookings();
-        booking.setUserId(bookingUserId);
-        booking.setHotelId(dto.getHotelId());
-        booking.setCheckIn(dto.getCheckIn());
-        booking.setCheckOut(dto.getCheckOut());
-        booking.setPrice(dto.getPrice());
-        booking.setStatus("BOOKED");
-
-        return bookingRepository.save(booking);
     }
 
     public List<Bookings> getAllBookings() {

@@ -26,7 +26,7 @@ public class BookingController {
         String token = jwtUtil.extractBearerToken(authorization);
         Long userId = jwtUtil.extractUserId(token);
         String role = jwtUtil.extractRole(token);
-        return ResponseEntity.ok(bookingService.createBooking(dto, userId, role));
+        return ResponseEntity.ok(bookingService.createBooking(dto, userId, role, authorization));
     }
 
     @GetMapping
