@@ -5,7 +5,6 @@ import com.bookingservice.entity.Bookings;
 import com.bookingservice.exception.BadRequestException;
 import com.bookingservice.repository.BookingRepository;
 import com.bookingservice.repository.HotelClient;
-import com.bookingservice.repository.UserClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -16,50 +15,41 @@ import java.util.List;
 public class BookingService {
 
     private final BookingRepository bookingRepository;
-    private final UserClient userClient;
     private final HotelClient hotelClient;
 
     public Bookings createBooking(BookingDTO dto, Long tokenUserId, String tokenRole, String authorization) {
 
-        try {
-            Long bookingUserId = dto.getUserId();
+        // For USER role, always use the userId from the JWT token (ignore body userId)
+        // For ADMIN role, allow specifying a userId in the body; fallback to token userId
+        Long bookingUserId;
 
-            if ("USER".equalsIgnoreCase(tokenRole)) {
-                if (bookingUserId != null && !bookingUserId.equals(tokenUserId)) {
-                    throw new BadRequestException("Users can create bookings only for themselves");
-                }
-                bookingUserId = tokenUserId;
+        if ("USER".equalsIgnoreCase(tokenRole)) {
+            // Regular users can only book for themselves
+            if (dto.getUserId() != null && !dto.getUserId().equals(tokenUserId)) {
+                throw new BadRequestException("Users can create bookings only for themselves");
             }
-
-            if (bookingUserId == null) {
-                throw new BadRequestException("userId is required");
-            }
-
-            // 🔥 External service calls
-            userClient.getUser(bookingUserId, authorization);
-            hotelClient.getHotel(dto.getHotelId(), authorization);
-
-            Bookings booking = new Bookings();
-            booking.setUserId(bookingUserId);
-            booking.setHotelId(dto.getHotelId());
-            booking.setCheckIn(dto.getCheckIn());
-            booking.setCheckOut(dto.getCheckOut());
-            booking.setPrice(dto.getPrice());
-            booking.setStatus("BOOKED");
-
-            return bookingRepository.save(booking);
-
-        } catch (BadRequestException e) {
-            System.err.println("Bad Request: " + e.getMessage());
-            throw e;
-
-        } catch (Exception e) {
-            // 🔥 THIS WILL SHOW REAL ERROR IN CONSOLE
-            System.err.println("Error while creating booking:");
-            e.printStackTrace();
-
-            throw new RuntimeException("Failed to create booking: " + e.getMessage());
+            bookingUserId = tokenUserId;
+        } else {
+            // Admin can specify userId explicitly, or it defaults to their own
+            bookingUserId = (dto.getUserId() != null) ? dto.getUserId() : tokenUserId;
         }
+
+        if (bookingUserId == null) {
+            throw new BadRequestException("userId could not be determined");
+        }
+
+        // Validate hotel exists via feign (hotel-service is the source of truth for hotels)
+        hotelClient.getHotel(dto.getHotelId(), authorization);
+
+        Bookings booking = new Bookings();
+        booking.setUserId(bookingUserId);
+        booking.setHotelId(dto.getHotelId());
+        booking.setCheckIn(dto.getCheckIn());
+        booking.setCheckOut(dto.getCheckOut());
+        booking.setPrice(dto.getPrice());
+        booking.setStatus("BOOKED");
+
+        return bookingRepository.save(booking);
     }
 
     public List<Bookings> getAllBookings() {

@@ -19,6 +19,22 @@ public class UserController {
     @Autowired
     private JwtUtil jwtUtil;
 
+    @PostMapping
+    public ResponseEntity<User> createUser(
+            @RequestHeader("Authorization") String authorization,
+            @RequestBody User user) {
+
+        String token = jwtUtil.extractBearerToken(authorization);
+        Long tokenUserId = jwtUtil.extractUserId(token);
+        String email = jwtUtil.extractEmail(token);
+
+        // Set the id and email from the JWT token to keep userdb in sync with auth_db
+        user.setId(tokenUserId);
+        user.setEmail(email);
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(userService.createUser(user));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<User> getUserById(@PathVariable Long id) {
         return ResponseEntity.ok(userService.getUserById(id));
